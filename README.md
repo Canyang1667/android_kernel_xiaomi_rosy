@@ -27,7 +27,7 @@ If you need the entire commit history, then the usual "recursive clone" command.
 Please build using `rosy-doge_defconfig`
 
 ## Bugs
-None
+Mic issue with some apps.
 
 ## Credits
 Huge Thanks to [@nathanchance](https://github.com/nathanchance) for creating & maintaining the `android-linux-stable` repo.
