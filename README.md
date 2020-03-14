@@ -7,12 +7,12 @@ This 3.18.x kernel tree is based on Q branch of CAF source with changes required
 ##### Shallow Clone
 If you're just cloning it just for building, then use the following command to save bandwidth & space.
 
-`git clone https://github.com/LinuxPanda/android_kernel_rosy.git -b q-318 --single-branch --depth=1`
+`git clone --single-branch --depth=1 https://github.com/LinuxPanda/android_kernel_xiaomi_rosy.git -b q-318`
 
 ##### Full Clone
 If you need the entire commit history, then the usual single branch clone command.
 
-`git clone https://github.com/LinuxPanda/android_kernel_rosy.git -b q-318 --single-branch`
+`git clone --single-branch https://github.com/LinuxPanda/android_kernel_xiaomi_rosy.git -b q-318`
 
 ## Building
 Please build using `rosy-doge_defconfig`
