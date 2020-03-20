@@ -1,4 +1,5 @@
 /* Copyright (c) 2015-2017, The Linux Foundation. All rights reserved.
+ * Copyright (C) 2019 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -72,6 +73,11 @@ static int mi2s_tx_bit_format = SNDRV_PCM_FORMAT_S16_LE;
 static int mi2s_tx_bits_per_sample = 16;
 static int mi2s_tx_sample_rate = SAMPLING_RATE_48KHZ;
 
+#ifdef CONFIG_D1_ROSY
+static int headset_gpio;
+static int spk_pa_gpio;
+#endif
+
 static atomic_t quat_mi2s_clk_ref;
 static atomic_t quin_mi2s_clk_ref;
 static atomic_t auxpcm_mi2s_clk_ref;
@@ -83,6 +89,11 @@ static int msm8952_mclk_event(struct snd_soc_dapm_widget *w,
 			      struct snd_kcontrol *kcontrol, int event);
 static int msm8952_wsa_switch_event(struct snd_soc_dapm_widget *w,
 			      struct snd_kcontrol *kcontrol, int event);
+
+#ifdef CONFIG_D1_ROSY
+extern unsigned char AW87319_Audio_Speaker(void);
+extern unsigned char AW87319_Audio_OFF(void);
+#endif
 
 /*
  * Android L spec
@@ -175,6 +186,9 @@ static const char *const proxy_rx_ch_text[] = {"One", "Two", "Three", "Four",
 static const char *const vi_feed_ch_text[] = {"One", "Two"};
 static char const *mi2s_rx_sample_rate_text[] = {"KHZ_48",
 					"KHZ_96", "KHZ_192"};
+#ifdef CONFIG_D1_ROSY
+static const char *const lineout_text[] = {"DISABLE", "ENABLE", "DUALMODE"};
+#endif
 
 static inline int param_is_mask(int p)
 {
@@ -266,6 +280,9 @@ int is_ext_spk_gpio_support(struct platform_device *pdev,
 
 static int enable_spk_ext_pa(struct snd_soc_codec *codec, int enable)
 {
+	/*bug_293382, zk-zhanghao, 2017/0913,modified spk_pop start*/
+	#ifdef CONFIG_D1_ROSY
+	#else
 	struct snd_soc_card *card = codec->component.card;
 	struct msm8916_asoc_mach_data *pdata = snd_soc_card_get_drvdata(card);
 	int ret;
@@ -275,11 +292,16 @@ static int enable_spk_ext_pa(struct snd_soc_codec *codec, int enable)
 			pdata->spk_ext_pa_gpio);
 		return false;
 	}
-
+	#endif
+	/*bug_293382, zk-zhanghao, 2017/0913,modified spk_pop end*/
 	pr_debug("%s: %s external speaker PA\n", __func__,
 		enable ? "Enable" : "Disable");
 
 	if (enable) {
+		#ifdef CONFIG_D1_ROSY
+		AW87319_Audio_Speaker();
+		/*bug_293382, zk-zhanghao, 2017/0913,modified spk_pop end*/
+		#else
 		ret = msm_gpioset_activate(CLIENT_WCD_INT, "ext_spk_gpio");
 		if (ret) {
 			pr_err("%s: gpio set cannot be de-activated %s\n",
@@ -287,7 +309,12 @@ static int enable_spk_ext_pa(struct snd_soc_codec *codec, int enable)
 			return ret;
 		}
 		gpio_set_value_cansleep(pdata->spk_ext_pa_gpio, enable);
+		#endif
 	} else {
+		#ifdef CONFIG_D1_ROSY
+		AW87319_Audio_OFF();
+		/*bug_293382, zk-zhanghao, 2017/0913,modified spk_pop end*/
+		#else
 		gpio_set_value_cansleep(pdata->spk_ext_pa_gpio, enable);
 		ret = msm_gpioset_suspend(CLIENT_WCD_INT, "ext_spk_gpio");
 		if (ret) {
@@ -295,6 +322,7 @@ static int enable_spk_ext_pa(struct snd_soc_codec *codec, int enable)
 					__func__, "ext_spk_gpio");
 			return ret;
 		}
+		#endif
 	}
 	return 0;
 }
@@ -722,6 +750,50 @@ static int msm8952_enable_dig_cdc_clk(struct snd_soc_codec *codec,
 	return ret;
 }
 
+#ifdef CONFIG_D1_ROSY
+static void msm8952_ext_spk_control(u32 enable)
+{
+	if (enable) {
+		AW87319_Audio_Speaker();
+	} else {
+		AW87319_Audio_OFF();
+	}
+
+    pr_debug("%s: external speaker PAs %s.\n", __func__, enable ? "Enable" : "Disable");
+}
+
+static int lineout_status_get(struct snd_kcontrol *kcontrol,
+	struct snd_ctl_elem_value *ucontrol)
+{
+	pr_debug("%s: get lineout_status_get\n", __func__);
+	return 0;
+}
+
+static int lineout_status_put(struct snd_kcontrol *kcontrol,
+	struct snd_ctl_elem_value *ucontrol)
+{
+	int state = 0;
+	state = ucontrol->value.integer.value[0];
+	pr_debug("%s:  external speaker PA mode:%d\n", __func__, state);
+
+	switch (state) {
+	case 1:
+		msm8952_ext_spk_control(1);
+		break;
+	case 0:
+		msm8952_ext_spk_control(0);
+		break;
+	case 2:
+		msm8952_ext_spk_control(1);
+		break;
+	default:
+		pr_err("%s:  Unexpected input value\n", __func__);
+		break;
+	}
+	return 0;
+}
+#endif 
+
 static int msm_btsco_rate_get(struct snd_kcontrol *kcontrol,
 				struct snd_ctl_elem_value *ucontrol)
 {
@@ -1063,6 +1135,9 @@ static const struct soc_enum msm_snd_enum[] = {
 				vi_feed_ch_text),
 	SOC_ENUM_SINGLE_EXT(ARRAY_SIZE(mi2s_rx_sample_rate_text),
 				mi2s_rx_sample_rate_text),
+	#ifdef CONFIG_D1_ROSY
+	SOC_ENUM_SINGLE_EXT(ARRAY_SIZE(lineout_text), lineout_text),
+	#endif
 };
 
 static const struct snd_kcontrol_new msm_snd_controls[] = {
@@ -1084,6 +1159,10 @@ static const struct snd_kcontrol_new msm_snd_controls[] = {
 			msm_vi_feed_tx_ch_get, msm_vi_feed_tx_ch_put),
 	SOC_ENUM_EXT("MI2S_RX SampleRate", msm_snd_enum[6],
 			mi2s_rx_sample_rate_get, mi2s_rx_sample_rate_put),
+	#ifdef CONFIG_D1_ROSY
+	SOC_ENUM_EXT("Lineout_1 amp", msm_snd_enum[7],
+    lineout_status_get, lineout_status_put),
+	#endif
 };
 
 static int msm8952_mclk_event(struct snd_soc_dapm_widget *w,
@@ -3152,6 +3231,30 @@ parse_mclk_freq:
 	}
 	pdata->mclk_freq = id;
 
+	#ifdef CONFIG_D1_ROSY
+	 spk_pa_gpio = of_get_named_gpio(pdev->dev.of_node, "ext-spk-amp-gpio", 0);
+	 if (spk_pa_gpio < 0) {
+		 dev_err(&pdev->dev,
+		 "%s: error! spk_pa_gpio is :%d\n", __func__, spk_pa_gpio);
+	 } else {
+		 if (gpio_request_one(spk_pa_gpio, GPIOF_DIR_OUT , "spk_enable")) {
+			 dev_err(&pdev->dev, "%s: request spk_pa_gpio  fail!\n", __func__);
+		 }
+	 }
+	 pr_debug("%s:  request spk_pa_gpio is %d!\n", __func__, spk_pa_gpio);
+
+	 headset_gpio = of_get_named_gpio(pdev->dev.of_node, "headset-gpio", 0);
+	if (headset_gpio < 0) {
+		dev_err(&pdev->dev,
+		"%s: error! headset_gpio is :%d\n", __func__, headset_gpio);
+	} else {
+		if (gpio_request_one(headset_gpio, GPIOF_DIR_OUT , "headset_enable")) {
+			dev_err(&pdev->dev, "%s: request headset_gpio  fail!\n", __func__);
+		}
+	}
+	pr_debug("%s:request headset_gpio is %d!\n", __func__, headset_gpio);
+	#endif
+
 	/*reading the gpio configurations from dtsi file*/
 	ret = msm_gpioset_initialize(CLIENT_WCD_INT, &pdev->dev);
 	if (ret < 0) {
@@ -3369,6 +3472,14 @@ err:
 			kfree(msm8952_codec_conf[i].name_prefix);
 		}
 	}
+
+	#ifdef CONFIG_D1_ROSY
+	if (spk_pa_gpio > 0)
+		gpio_free(spk_pa_gpio);
+	if (headset_gpio > 0)
+		gpio_free(headset_gpio);
+	#endif
+
 err1:
 	devm_kfree(&pdev->dev, pdata);
 	return ret;
