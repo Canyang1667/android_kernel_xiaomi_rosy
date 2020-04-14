@@ -38,6 +38,8 @@
 #define XO_CLK_RATE	19200000
 #define CMDLINE_DSI_CTL_NUM_STRING_LEN 2
 
+struct mutex cabc_lock;
+
 /* Master structure to hold all the information about the DSI/panel */
 static struct mdss_dsi_data *mdss_dsi_res;
 
@@ -4376,6 +4378,49 @@ static int mdss_dsi_register_driver(void)
 {
 	return platform_driver_register(&mdss_dsi_driver);
 }
+
+/*lizhuoxun 20171031 add CABC function for seting*/
+extern int mdss_dsi_panel_cabc(struct mdss_panel_data *pdata);
+ int mdss_panel_set_cabc(struct mdss_panel_data *pdata, int  mode)
+{
+	int ret = 0;
+	struct mdss_dsi_ctrl_pdata *ctrl_pdata = NULL;
+	if (pdata == NULL) {
+		pr_err("%s: Invalid input data\n", __func__);
+		return -EINVAL;
+	}
+	pr_err("%s: Set panel cabc, mode is %d\n", __func__, mode);
+	mutex_lock(&cabc_lock);
+	ctrl_pdata = container_of(pdata, struct mdss_dsi_ctrl_pdata,
+					panel_data);
+	mdss_dsi_clk_ctrl(ctrl_pdata, ctrl_pdata->dsi_clk_handle, MDSS_DSI_ALL_CLKS, MDSS_DSI_CLK_ON);
+	switch (mode) {
+	case CABC_ON:
+		ctrl_pdata->cabc_cmds = ctrl_pdata->cabc_on_cmds;
+		break;
+	case CABC_OFF:
+		ctrl_pdata->cabc_cmds = ctrl_pdata->cabc_off_cmds;
+		break;
+	default:
+		pr_err("%s: Set panel cabc fail, mode is %d\n", __func__, mode);
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	ret = mdss_dsi_panel_cabc(pdata);
+	if (ret)
+	{
+		pr_err("%s: unable to set the panel cabc\n", __func__);
+		goto err_out;
+	}
+
+err_out:
+	mdss_dsi_clk_ctrl(ctrl_pdata, ctrl_pdata->dsi_clk_handle, MDSS_DSI_ALL_CLKS, MDSS_DSI_CLK_OFF);
+	mutex_unlock(&cabc_lock);
+
+	return ret;
+}
+/*lizhuoxun 20171031 add CABC function for seting*/
 
 static int __init mdss_dsi_driver_init(void)
 {

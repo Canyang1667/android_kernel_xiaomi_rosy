@@ -4955,6 +4955,7 @@ int mdss_fb_do_ioctl(struct fb_info *info, unsigned int cmd,
 	struct mdp_buf_sync buf_sync;
 	unsigned int dsi_mode = 0;
 	struct mdss_panel_data *pdata = NULL;
+	unsigned int CABC_mode = 0;
 
 	if (!info || !info->par)
 		return -EINVAL;
@@ -5031,6 +5032,16 @@ int mdss_fb_do_ioctl(struct fb_info *info, unsigned int cmd,
 
 	case MSMFB_ASYNC_POSITION_UPDATE:
 		ret = mdss_fb_async_position_update_ioctl(info, argp);
+		break;
+
+	case MSMFB_SET_CABC:
+		if (copy_from_user(&CABC_mode, argp, sizeof(CABC_mode)))
+		{
+			pr_err("%s: MSMFB_SET_CABC ioctl failed\n", __func__);
+			goto exit;
+		}
+		ret = mdss_panel_set_cabc(pdata, CABC_mode);
+		pdata->panel_info.cabcmode = CABC_mode;
 		break;
 
 	default:

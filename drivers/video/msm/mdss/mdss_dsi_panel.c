@@ -33,11 +33,11 @@
 #define DT_CMD_HDR 6
 #define MIN_REFRESH_RATE 48
 #define DEFAULT_MDP_TRANSFER_TIME 14000
-
 #define VSYNC_DELAY msecs_to_jiffies(17)
 
 extern char Lcm_name[HARDWARE_MAX_ITEM_LONGTH];
 extern bool is_Lcm_Present;
+extern int panel_dead2tp;
 
 DEFINE_LED_TRIGGER(bl_led_trigger);
 
@@ -492,7 +492,7 @@ int mdss_dsi_panel_reset(struct mdss_panel_data *pdata, int enable)
 			usleep_range(100, 110);
 			gpio_free(ctrl_pdata->disp_en_gpio);
 		}
-		if (((tp_gesture_onoff) || (pinfo->pwr_off_rst_pull_high)))
+		if (((tp_gesture_onoff) || (pinfo->pwr_off_rst_pull_high)) && pinfo->panel_dead == 0)
 			gpio_set_value((ctrl_pdata->rst_gpio), 1);
 		else
 			gpio_set_value((ctrl_pdata->rst_gpio), 0);
@@ -899,6 +899,13 @@ static int mdss_dsi_panel_on(struct mdss_panel_data *pdata)
 	if (on_cmds->cmd_cnt)
 		mdss_dsi_panel_cmds_send(ctrl, on_cmds, CMD_REQ_COMMIT);
 
+	/*lizhuoxun 20171207  Add CABC sent cmds in panel on start*/
+	if (pinfo->cabcmode) {
+		if (ctrl->cabc_on_cmds.cmd_cnt)
+			mdss_dsi_panel_cmds_send(ctrl, &ctrl->cabc_on_cmds, CMD_REQ_COMMIT);
+	}
+	/*lizhuoxun 20171207  Add CABC sent cmds in panel on start*/
+
 	if (pinfo->compression_mode == COMPRESSION_DSC)
 		mdss_dsi_panel_dsc_pps_send(ctrl, pinfo);
 
@@ -1043,6 +1050,31 @@ static int mdss_dsi_panel_low_power_config(struct mdss_panel_data *pdata,
 	return 0;
 }
 
+/*lizhuoxun 20171031 add CABC function for seting*/
+int mdss_dsi_panel_cabc(struct mdss_panel_data *pdata)
+{
+	struct mipi_panel_info *mipi;
+	struct mdss_dsi_ctrl_pdata *ctrl = NULL;
+
+	if (pdata == NULL) {
+		pr_err("%s: Invalid input data\n", __func__);
+		return -EINVAL;
+	}
+
+	ctrl = container_of(pdata, struct mdss_dsi_ctrl_pdata,
+				panel_data);
+	mipi  = &pdata->panel_info.mipi;
+
+	pr_debug("%s: ctrl=%pK ndx=%d\n", __func__, ctrl, ctrl->ndx);
+
+	if (ctrl->cabc_cmds.cmd_cnt)
+		mdss_dsi_panel_cmds_send(ctrl, &ctrl->cabc_cmds, CMD_REQ_COMMIT);
+
+	pr_debug("%s:-\n", __func__);
+	return 0;
+}
+/*lizhuoxun 20171031 add CABC function for seting*/
+
 static void mdss_dsi_parse_trigger(struct device_node *np, char *trigger,
 		char *trigger_key)
 {
@@ -1091,7 +1123,7 @@ static int mdss_dsi_parse_dcs_cmds(struct device_node *np,
 	while (len >= sizeof(*dchdr)) {
 		dchdr = (struct dsi_ctrl_hdr *)bp;
 		dchdr->dlen = ntohs(dchdr->dlen);
-		if (dchdr->dlen > len) {
+		if (dchdr->dlen > len || dchdr->dlen < 0) {
 			pr_err("%s: dtsi cmd=%x error, len=%d",
 				__func__, dchdr->dtype, dchdr->dlen);
 			goto exit_free;
@@ -1706,9 +1738,15 @@ static bool mdss_dsi_cmp_panel_reg_v2(struct mdss_dsi_ctrl_pdata *ctrl)
 
 	for (j = 0; j < ctrl->groups; ++j) {
 		for (i = 0; i < len; ++i) {
-			if (ctrl->return_buf[i] !=
-				ctrl->status_value[group + i])
+			if (ctrl->return_buf[i] != ctrl->status_value[group + i]) {
+				pr_info("%s: LCD ESD check fail, return_buf[%d]=0x%02x , status_value=[%d]=0x%02x \n", __func__,
+				i, ctrl->return_buf[i], group + i, ctrl->status_value[group + i]);
 				break;
+				}
+			if (panel_dead2tp) {
+				pr_info("%s: LCD ESD check fail, panel_dead2tp is %d\n ", __func__, panel_dead2tp);
+				break;
+				}
 		}
 
 		if (i == len)
@@ -2813,6 +2851,12 @@ static int mdss_panel_parse_dt(struct device_node *np,
 
 	mdss_dsi_parse_dcs_cmds(np, &ctrl_pdata->off_cmds,
 		"qcom,mdss-dsi-off-command", "qcom,mdss-dsi-off-command-state");
+
+	mdss_dsi_parse_dcs_cmds(np, &ctrl_pdata->cabc_on_cmds,
+			"qcom,mdss-dsi-panel-cabc-on-command", "qcom,mdss-dsi-panel-cabc-command-state");
+
+	mdss_dsi_parse_dcs_cmds(np, &ctrl_pdata->cabc_off_cmds,
+			"qcom,mdss-dsi-panel-cabc-off-command", "qcom,mdss-dsi-panel-cabc-command-state");
 
 	mdss_dsi_parse_dcs_cmds(np, &ctrl_pdata->idle_on_cmds,
 		"qcom,mdss-dsi-idle-on-command",
