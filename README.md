@@ -1,19 +1,3 @@
-## "doge kernel" oreo tree for Xiaomi Redmi 5 [rosy]
+## Deprecated
 
-### Kernel source
-This 3.18.x kernel tree is based on [android-linux-stable's](https://github.com/android-linux-stable/msm-3.18) `kernel.lnx.3.18.r33-rel` branch with changes necessary for rosy.
-
-Prima wlan driver is added as module from [android_vendor_qcom_opensource_wlan_prima's](https://github.com/khusika/android_vendor_qcom_opensource_wlan_prima) `wlan-driver.lnx.1.0.r30-rel` branch.
-
-### Bugs
-None
-
-### Building
-`git clone --recursive https://github.com/LinuxPanda/android_kernel_rosy.git -b o-318`
-
-The `--recursive` command is required because then only it'll fetch the module trees too.
-
-### Credits
-Huge Thanks to [@nathanchance](https://github.com/nathanchance) for creating & maintaining the `android-linux-stable` repo, without which this kernel wouldn't exist.
-
-Thanks to [@khusika](https://github.com/khusika) for the `android_vendor_qcom_opensource_wlan_prima` repo.
+This branch is deprecated. Please check [3.18](https://github.com/LinuxPanda/android_kernel_xiaomi_rosy/tree/3.18) branch. Thanks.
